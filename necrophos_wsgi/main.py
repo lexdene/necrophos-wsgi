@@ -18,10 +18,15 @@ def parse_args():
         help='app object',
     )
 
+    parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+    )
+
     return parser.parse_args()
 
 
-def setup_logging():
+def setup_logging(verbose=False):
     logging.config.dictConfig({
         'version': 1,
         'disable_existing_loggers': False,
@@ -47,15 +52,7 @@ def setup_logging():
             '': {
                 'handlers': ['console'],
                 'propagate': True,
-                'level': 'DEBUG',
-            },
-            'sniper': {
-                'propagate': True,
-                'level': 'DEBUG',
-            },
-
-            'sqlalchemy.engine': {
-                'level': 'INFO',
+                'level': 'DEBUG' if verbose else 'ERROR',
             },
         },
     })
@@ -65,7 +62,7 @@ def main():
     from .server import Server
     args = parse_args()
 
-    setup_logging()
+    setup_logging(args.verbose)
 
     server = Server(args.app)
     return server.run(port=args.port)
