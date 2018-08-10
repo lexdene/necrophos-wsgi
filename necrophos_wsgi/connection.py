@@ -1,9 +1,7 @@
 import logging
-from itertools import chain
 
 from .exceptions import ParseError
 from .response import Response
-from .utils import ensure_bytes
 
 HTTP_LINE_SEPARATOR = b'\r\n'
 
@@ -16,8 +14,6 @@ class Connection(object):
 
         self.reader = reader
         self.writer = writer
-
-        self.response = None
 
     async def run(self):
         env = {}
@@ -42,35 +38,13 @@ class Connection(object):
                     env[key] = value
 
         logger.debug('env: %s', env)
-        self.response = Response()
 
         app = self.server.get_app()
-        ret = app(env, self.start_response)
 
-        await self._write_line(b'HTTP/1.1 %s' % self.response.status.encode())
+        response = Response(self)
+        await response.run(app, env)
 
-        if len(ret) == 1 and isinstance(ret[0], (bytes, str)):
-            body = ensure_bytes(ret[0])
-
-        content_length = len(body)
-
-        headers = [
-            ('Content-Length', str(content_length)),
-        ]
-        for key, value in chain(
-            headers, self.response.headers
-        ):
-            await self._write_line(
-                b'%s: %s' % (
-                    ensure_bytes(key),
-                    ensure_bytes(value),
-                )
-            )
-        await self._write_line(b'')
-        await self.writer.drain()
-
-        self.writer.write(body)
-        await self.writer.drain()
+        self.writer.close()
 
     async def _read_line(self):
         while True:
@@ -84,12 +58,8 @@ class Connection(object):
 
             yield line
 
-    async def _write_line(self, line):
+    async def write_line(self, line):
         self.writer.write(line + HTTP_LINE_SEPARATOR)
-
-    def start_response(self, status, headers):
-        self.response.status = status
-        self.response.headers = headers
 
 
 def _parse_first_line(line):
