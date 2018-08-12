@@ -2,8 +2,7 @@ import logging
 
 from .exceptions import ParseError
 from .response import Response
-
-HTTP_LINE_SEPARATOR = b'\r\n'
+from .http import HttpReader, HttpWriter
 
 logger = logging.getLogger(__name__)
 
@@ -12,13 +11,13 @@ class Connection(object):
     def __init__(self, server, reader, writer):
         self.server = server
 
-        self.reader = reader
-        self.writer = writer
+        self.reader = HttpReader(reader)
+        self.writer = HttpWriter(writer)
 
     async def run(self):
         env = {}
 
-        line_it = self._read_line()
+        line_it = self.reader.iter_lines()
         first_line = await line_it.__anext__()
         env.update(_parse_first_line(first_line))
 
@@ -41,25 +40,11 @@ class Connection(object):
 
         app = self.server.get_app()
 
-        response = Response(self)
+        response = Response(self.writer)
         await response.run(app, env)
 
+        await self.writer.drain()
         self.writer.close()
-
-    async def _read_line(self):
-        while True:
-            line = await self.reader.readuntil(HTTP_LINE_SEPARATOR)
-
-            # remove separator
-            line = line[:-len(HTTP_LINE_SEPARATOR)]
-
-            if not line:
-                break
-
-            yield line
-
-    async def write_line(self, line):
-        self.writer.write(line + HTTP_LINE_SEPARATOR)
 
 
 def _parse_first_line(line):

@@ -4,8 +4,9 @@ from .utils import ensure_bytes
 
 
 class Response(object):
-    def __init__(self, connection):
-        self.connection = connection
+    def __init__(self, writer):
+        # writer is a HttpWriter object
+        self.writer = writer
 
         self.status = b''
         self.headers = []
@@ -13,11 +14,10 @@ class Response(object):
         self.is_headers_sent = False
 
     async def run(self, app, env):
-        # app = self.connection.server.get_app()
         if iscoroutinefunction(app):
             ret = await app(env, self.start_response)
         else:
-            ret = app(env, self.start_response)
+            ret = app(env, self.sync_start_response)
 
         length = None
         try:
@@ -45,24 +45,35 @@ class Response(object):
 
     async def write(self, chunk):
         if not self.is_headers_sent:
-            await self.send_headers()
+            self.send_headers()
+            await self.writer.drain()
 
-        self.connection.writer.write(ensure_bytes(chunk))
-        await self.connection.writer.drain()
+        self.writer.write(ensure_bytes(chunk))
+        await self.writer.drain()
 
-    async def send_headers(self):
-        await self.connection.write_line(
+    def sync_start_response(self, *argv):
+        self.start_response(*argv)
+
+        return self.sync_write
+
+    def sync_write(self, chunk):
+        if not self.is_headers_sent:
+            self.send_headers()
+
+        self.writer.write(ensure_bytes(chunk))
+
+    def send_headers(self):
+        self.writer.write_line(
             b'HTTP/1.1 %s' % ensure_bytes(self.status)
         )
 
         for key, value in self.headers:
-            await self.connection.write_line(
+            self.writer.write_line(
                 b'%s: %s' % (
                     ensure_bytes(key),
                     ensure_bytes(value),
                 )
             )
-        await self.connection.write_line(b'')
-        await self.connection.writer.drain()
+        self.writer.write_line(b'')
 
         self.is_headers_sent = True

@@ -10,11 +10,10 @@ def old_app_with_yield(env, start_response):
     yield "hello, world!\n"
 
 
-# use write in old style
 # not supported: write must be async
 def old_app_with_write(env, start_response):
     write = start_response('200 OK', [('Content-Type', 'text/plain')])
-    write('hello, world!')
+    write('hello, world!\n')
     return []
 
 
