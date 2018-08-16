@@ -5,7 +5,7 @@ with open("README.rst", "r") as fh:
 
 setup(
     name='necrophos-wsgi',
-    version='0.0.3',
+    version='0.0.4',
     description='wsgi-like server based on asyncio',
     long_description=long_description,
     author='Elephant Liu',
