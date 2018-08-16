@@ -58,11 +58,20 @@ def setup_logging(verbose=False):
     })
 
 
+def setup_env():
+    import os
+    import sys
+
+    sys.path.append(os.getcwd())
+
+
 def main():
     from .server import Server
     args = parse_args()
 
     setup_logging(args.verbose)
+
+    setup_env()
 
     server = Server(args.app)
     return server.run(port=args.port)
