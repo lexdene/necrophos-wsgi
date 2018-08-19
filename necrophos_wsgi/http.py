@@ -17,6 +17,10 @@ class HttpReader(object):
 
             yield line
 
+    # pass by methods
+    async def read(self, n=-1):
+        return await self._real.read(n)
+
 
 class HttpWriter(object):
     def __init__(self, writer):

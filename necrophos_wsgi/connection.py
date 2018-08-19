@@ -1,5 +1,7 @@
 import logging
 
+from io import BytesIO
+
 from .exceptions import ParseError
 from .response import Response
 from .http import HttpReader, HttpWriter
@@ -29,12 +31,20 @@ class Connection(object):
                 env['SERVER_NAME'] = host
                 env['SERVER_PORT'] = port
             else:
-                key = name.upper().replace(b'-', b'_')
+                key = name.decode().upper().replace('-', '_')
                 if key in (
-                    b'CONTENT_LENGTH',
-                    b'CONTENT_TYPE',
+                    'CONTENT_LENGTH',
+                    'CONTENT_TYPE',
                 ):
                     env[key] = value
+                else:
+                    env['HTTP_%s' % key] = value
+
+        if 'CONTENT_LENGTH' in env:
+            content_length = int(env['CONTENT_LENGTH'].decode())
+            body = await self.reader.read(content_length)
+
+            env['wsgi.input'] = BytesIO(body)
 
         logger.debug('env: %s', env)
 
