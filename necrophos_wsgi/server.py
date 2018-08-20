@@ -1,7 +1,7 @@
 import logging
 
-from .event_loop import EventLoop
 from .connection import Connection
+from .event_loop import EventLoop
 from .utils import import_object
 
 logger = logging.getLogger(__name__)

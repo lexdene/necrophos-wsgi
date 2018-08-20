@@ -1,10 +1,9 @@
 import logging
-
 from io import BytesIO
 
 from .exceptions import ParseError
-from .response import Response
 from .http import HttpReader, HttpWriter
+from .response import Response
 
 logger = logging.getLogger(__name__)
 
