@@ -1,0 +1,18 @@
+language: python
+python:
+  - "3.5"
+  - "3.6"
+  - "3.7-dev"
+  - "nightly"
+  - "pypy3"
+install:
+  - pip install asynctest
+script:
+  - python -m unittest
+jobs:
+  include:
+    - stage: code check
+      name: flake8
+      python: 3.6
+      install: pip install -q flake8
+      script: flake8 .
