@@ -1,6 +1,10 @@
-from inspect import isawaitable
+from asyncio import iscoroutinefunction
 
 from .utils import ensure_bytes
+
+
+def is_async_mode(app):
+    return iscoroutinefunction(app) or iscoroutinefunction(app.__call__)
 
 
 class Response(object):
@@ -14,9 +18,10 @@ class Response(object):
         self.is_headers_sent = False
 
     async def run(self, app, env):
-        ret = app(env, self.sync_start_response)
-        if isawaitable(ret):
-            ret = await ret
+        if is_async_mode(app):
+            ret = await app(env, self.start_response)
+        else:
+            ret = app(env, self.sync_start_response)
 
         length = None
         try:
