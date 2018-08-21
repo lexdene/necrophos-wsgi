@@ -58,6 +58,23 @@ class AppObject:
         return [res]
 
 
+# read body
+async def read_body_app(env, start_response):
+    start_response('200 OK', [('Content-Type', 'text/plain')])
+
+    length = int(env['CONTENT_LENGTH'].decode())
+    body = await env['wsgi.input'].read(length)
+    return [b'body is `%s`\n' % body]
+
+
+# old app read body
+def old_app_read_body(env, start_response):
+    start_response('200 OK', [('Content-Type', 'text/plain')])
+    length = int(env['CONTENT_LENGTH'].decode())
+    body = env['wsgi.input'].read(length)
+    return [b'body is `%s`\n' % body]
+
+
 class TestReader:
     def __init__(self, content):
         self.content = content
@@ -66,8 +83,11 @@ class TestReader:
         index = self.content.find(sep)
 
         p = index + len(sep)
-        ret = self.content[:p]
-        self.content = self.content[p:]
+        return await self.read(p)
+
+    async def read(self, n):
+        ret = self.content[:n]
+        self.content = self.content[n:]
 
         return ret
 
@@ -90,12 +110,17 @@ class TestServer:
     def __init__(self, app):
         self.app = app
 
-    async def request(self, method, path):
+    async def request(self, method, path, headers={}, body=None):
         from necrophos_wsgi.connection import Connection
 
         req = BytesIO()
         req.write(('%s %s HTTP/1.1\r\n' % (method, path)).encode())
+        for key, value in headers.items():
+            req.write(b'%s: %s\r\n' % (key.encode(), value.encode()))
         req.write(b'\r\n')
+        if body:
+            req.write(body)
+
         content = req.getvalue()
         reader = TestReader(content)
 
@@ -143,3 +168,28 @@ class TestAppTestCase(TestCase):
 
                 body = resp.read1()
                 self.assertEqual(body, b'hello, world!\n')
+
+    async def test_read_body(self):
+        for app in (
+            read_body_app,
+            old_app_read_body,
+        ):
+            with self.subTest(app=app):
+                server = TestServer(app)
+
+                body = b'some body here'
+
+                resp = await server.request(
+                    method='POST',
+                    path='/test',
+                    headers={
+                        'Content-Length': str(len(body)),
+                    },
+                    body=body,
+                )
+
+                self.assertEqual(resp.status, 200)
+                self.assertEqual(resp.headers['Content-Type'], 'text/plain')
+
+                body = resp.read1()
+                self.assertEqual(body, b'body is `some body here`\n')

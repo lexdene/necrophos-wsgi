@@ -1,10 +1,19 @@
 from asyncio import iscoroutinefunction
+from io import BytesIO
 
 from .utils import ensure_bytes
 
 
 def is_async_mode(app):
     return iscoroutinefunction(app) or iscoroutinefunction(app.__call__)
+
+
+async def read_body(env):
+    if 'CONTENT_LENGTH' in env:
+        content_length = int(env['CONTENT_LENGTH'].decode())
+        body = await env['wsgi.input'].read(content_length)
+
+        env['wsgi.input'] = BytesIO(body)
 
 
 class Response(object):
@@ -21,6 +30,7 @@ class Response(object):
         if is_async_mode(app):
             ret = await app(env, self.start_response)
         else:
+            await read_body(env)
             ret = app(env, self.sync_start_response)
 
         length = None
