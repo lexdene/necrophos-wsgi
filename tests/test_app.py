@@ -2,6 +2,8 @@ from io import BytesIO
 
 from asynctest import TestCase
 
+from .utils import parse_response
+
 
 # compat with old style
 def old_simple_app(env, start_response):
@@ -32,7 +34,7 @@ async def get_response():
     from asyncio import sleep
 
     await sleep(0.1)
-    return 'hello from get response\n'
+    return 'hello, world!\n'
 
 
 # simple async app
@@ -103,132 +105,41 @@ class TestServer:
         cnct = Connection(self, reader, writer)
         await cnct.run()
 
-        return resp
+        return parse_response(resp)
 
     def get_app(self):
         return self.app
 
 
 class TestAppTestCase(TestCase):
-    async def test_old_simple_app(self):
-        server = TestServer(old_simple_app)
-        resp = await server.request(
-            method='GET',
-            path='/test',
-        )
+    async def test_apps(self):
+        for app, has_length in (
+            (old_simple_app, True),
+            (old_app_with_yield, False),
+            (old_app_with_write, False),
+            (OldAppObject(), True),
+            (simple_async_app, True),
+            (async_app_with_write, False),
+            (AppObject(), True),
+        ):
+            with self.subTest(app=app):
+                server = TestServer(app)
+                resp = await server.request(
+                    method='GET',
+                    path='/test',
+                )
 
-        content = resp.getvalue()
+                self.assertEqual(resp.status, 200)
+                self.assertEqual(resp.headers['Content-Type'], 'text/plain')
+                if has_length:
+                    self.assertEqual(
+                        resp.headers['Content-Length'],
+                        '14'
+                    )
+                else:
+                    self.assertNotIn(
+                        'Content-Length', resp.headers
+                    )
 
-        self.assertEqual(
-            content,
-            b'HTTP/1.1 200 OK\r\n'
-            b'Content-Type: text/plain\r\n'
-            b'Content-Length: 14\r\n'
-            b'\r\n'
-            b'hello, world!\n'
-        )
-
-    async def test_old_app_with_yield(self):
-        server = TestServer(old_app_with_yield)
-        resp = await server.request(
-            method='GET',
-            path='/test',
-        )
-
-        content = resp.getvalue()
-
-        self.assertEqual(
-            content,
-            b'HTTP/1.1 200 OK\r\n'
-            b'Content-Type: text/plain\r\n'
-            b'\r\n'
-            b'hello, world!\n'
-        )
-
-    async def test_old_app_with_write(self):
-        server = TestServer(old_app_with_write)
-        resp = await server.request(
-            method='GET',
-            path='/test',
-        )
-
-        content = resp.getvalue()
-
-        self.assertEqual(
-            content,
-            b'HTTP/1.1 200 OK\r\n'
-            b'Content-Type: text/plain\r\n'
-            b'\r\n'
-            b'hello, world!\n'
-        )
-
-    async def test_old_app_object(self):
-        server = TestServer(OldAppObject())
-        resp = await server.request(
-            method='GET',
-            path='/test',
-        )
-
-        content = resp.getvalue()
-
-        self.assertEqual(
-            content,
-            b'HTTP/1.1 200 OK\r\n'
-            b'Content-Type: text/plain\r\n'
-            b'Content-Length: 14\r\n'
-            b'\r\n'
-            b'hello, world!\n'
-        )
-
-    async def test_simple_async_app(self):
-        server = TestServer(simple_async_app)
-        resp = await server.request(
-            method='GET',
-            path='/test',
-        )
-
-        content = resp.getvalue()
-
-        self.assertEqual(
-            content,
-            b'HTTP/1.1 200 OK\r\n'
-            b'Content-Type: text/plain\r\n'
-            b'Content-Length: 24\r\n'
-            b'\r\n'
-            b'hello from get response\n'
-        )
-
-    async def test_async_app_with_write(self):
-        server = TestServer(async_app_with_write)
-        resp = await server.request(
-            method='GET',
-            path='/test',
-        )
-
-        content = resp.getvalue()
-
-        self.assertEqual(
-            content,
-            b'HTTP/1.1 200 OK\r\n'
-            b'Content-Type: text/plain\r\n'
-            b'\r\n'
-            b'hello, world!\n'
-        )
-
-    async def test_app_object(self):
-        server = TestServer(AppObject())
-        resp = await server.request(
-            method='GET',
-            path='/test',
-        )
-
-        content = resp.getvalue()
-
-        self.assertEqual(
-            content,
-            b'HTTP/1.1 200 OK\r\n'
-            b'Content-Type: text/plain\r\n'
-            b'Content-Length: 24\r\n'
-            b'\r\n'
-            b'hello from get response\n'
-        )
+                body = resp.read1()
+                self.assertEqual(body, b'hello, world!\n')
